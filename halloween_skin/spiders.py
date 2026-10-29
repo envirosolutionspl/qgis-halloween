@@ -1,11 +1,11 @@
 """Easter egg: four black spiders come down from the top of the map view.
 
-Typing one of the KEYWORDS into the status bar's coordinate box and
-pressing Enter starts it. A transparent overlay over the map canvas paints
-the spiders with QPainter: each descends on its thread at its own speed,
-hangs for a while swaying and moving its legs, then climbs back up and the
-overlay disappears. The map keeps working underneath (the overlay lets the
-mouse through).
+Typing one of the KEYWORDS into the status bar's coordinate box (or into
+ArcSkin's coordinate box under the map) and pressing Enter starts it. A
+transparent overlay over the map canvas paints the spiders with QPainter:
+each descends on its thread at its own speed, hangs for a while swaying and
+moving its legs, then climbs back up and the overlay disappears. The map
+keeps working underneath (the overlay lets the mouse through).
 """
 
 import math
@@ -15,6 +15,8 @@ from qgis.PyQt.QtCore import (QElapsedTimer, QEvent, QObject, QPointF, Qt,
                               QTimer)
 from qgis.PyQt.QtGui import QColor, QPainter, QPen
 from qgis.PyQt.QtWidgets import QLineEdit, QWidget
+
+from . import arcskin
 
 KEYWORDS = ("halloween",)
 COORDS_WIDGET = "QgsStatusBarCoordinatesWidget"
@@ -205,29 +207,41 @@ def coordinate_box(win):
 
 
 class EasterEgg(QObject):
-    """Watch the coordinate box; a keyword and Enter drop the spiders."""
+    """Watch the coordinate boxes; a keyword and Enter drop the spiders."""
 
     def __init__(self, iface):
-        """Find the coordinate box and install the event filter on it.
+        """Find the coordinate boxes and install the event filter on them.
 
         :param iface: the QGIS interface.
         """
         super().__init__(iface.mainWindow())
         self.iface = iface
-        self.box = coordinate_box(iface.mainWindow())
+        self.box = coordinate_box(iface.mainWindow())  # QGIS's own box
+        self.boxes = []  # every box watched: QGIS's and ArcSkin's
         self.show = None
-        if self.box is not None:
-            self.box.installEventFilter(self)
+        self.attach()
+
+    def attach(self):
+        """Watch the coordinate boxes present now; may be called again.
+
+        ArcSkin hides the status bar and types coordinates into a box of
+        its own under the map, built after it is switched on.
+        """
+        win = self.iface.mainWindow()
+        for box in (self.box, arcskin.coordinate_box(win)):
+            if box is not None and box not in self.boxes:
+                box.installEventFilter(self)
+                self.boxes.append(box)
 
     def eventFilter(self, obj, event):  # noqa: N802 (Qt API name)
         """Start the show on Enter if the box holds one of :data:`KEYWORDS`.
 
         That key press is consumed; everything else reaches QGIS.
         """
-        if (obj is self.box and event.type() == QEvent.Type.KeyPress
+        if (obj in self.boxes and event.type() == QEvent.Type.KeyPress
                 and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-                and self.box.text().strip().lower() in KEYWORDS):
-            self.box.clear()
+                and obj.text().strip().lower() in KEYWORDS):
+            obj.clear()
             self.drop()
             return True  # QGIS must not try to read it as coordinates
         return False
@@ -243,12 +257,13 @@ class EasterEgg(QObject):
         self.show = SpiderDrop(canvas)
 
     def remove(self):
-        """Stop watching the box and end a running show."""
-        if self.box is not None:
+        """Stop watching the boxes and end a running show."""
+        for box in self.boxes:
             try:
-                self.box.removeEventFilter(self)
-            except RuntimeError:
+                box.removeEventFilter(self)
+            except RuntimeError:  # gone with ArcSkin's footer
                 pass
+        self.boxes = []
         if self.show is not None:
             try:
                 self.show.finish()

@@ -83,12 +83,23 @@ class SpiderWebs(QObject):
         :param iface: the QGIS interface.
         """
         super().__init__(iface.mainWindow())
+        self.iface = iface
         self.buttons = {}  # button -> its plain icon
-        win = iface.mainWindow()
+        self.rescan()
+
+    def rescan(self):
+        """Put the filter on EnviroSolutions buttons not watched yet.
+
+        Called again when another plugin builds new buttons for the same
+        actions (the Add-ins tab of ArcSkin's ribbon).
+        """
+        win = self.iface.mainWindow()
         actions = {_address(a) for a in envirosolutions_actions()}
         if not actions:
             return
         for button in win.findChildren(QToolButton):
+            if button in self.buttons:
+                continue
             action = button.defaultAction()
             if action is not None and _address(action) in actions:
                 self.buttons[button] = None

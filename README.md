@@ -29,6 +29,9 @@ layout of QGIS is not changed, and the skin is switched off with one click.
 - A spider web over the icons of EnviroSolutions plugins on hover.
 - Halloween cursors for the map tools and a spider easter egg (details below).
 - Arrows, check boxes, radio buttons and tree branches drawn for each theme.
+- Works alongside [ArcSkin](https://github.com/envirosolutionspl/arcskin): the
+  Halloween colours go on top of the ribbon, the pumpkins, bats and ghosts move to
+  the ribbon's title row and the easter egg also answers in ArcSkin's coordinate box.
 - English interface, Polish translation.
 
 ## Halloween cursors
@@ -94,18 +97,24 @@ Nothing is written into the QGIS profile and your projects are not changed.
   Qt style sheet (`style.qss`, colours written out in full, `@theme_path` standing
   for the theme folder) and a palette (`palette.txt`, lines
   `<QPalette::ColorRole number>:<colour>`). The palette is needed because the style
-  sheet does not reach every QGIS dialog. Both are applied to the running
-  application and the previous ones are restored when the skin is switched off.
+  sheet does not reach every QGIS dialog. The style sheet is appended to the
+  application's as a marked block, so the rules of another plugin that styles QGIS
+  (ArcSkin) stay; switching off removes that block only and puts the palette back.
+  If another plugin replaces the whole sheet, the `StyleChange` event on the main
+  window brings the block back (or removes a stale copy while the skin is off).
 - **Menu-bar decoration** (`animation.py`). Qt does not run CSS or SMIL animations
   in SVG, so the MAIP drawings are painted with `QPainter` on a transparent overlay
-  that lets the mouse through, refreshed 25 times a second.
+  that lets the mouse through, refreshed 25 times a second. While ArcSkin hides the
+  menu bar, the overlay sits on the ribbon's title row.
 - **Cursors** (`cursors.py`). The map tools are recognised through their actions
   when they become the canvas's current tool (`QgsMapCanvas.mapToolSet`).
 - **Spider web** (`icons.py`). Tool buttons of plugins whose metadata names
   EnviroSolutions as the author get an event filter that swaps the icon on hover.
 - **Easter egg** (`spiders.py`). An event filter on the status bar's coordinate box
-  catches the word `halloween` followed by Enter and runs the spiders on an overlay
-  over the map canvas.
+  (and on ArcSkin's, when present) catches the word `halloween` followed by Enter
+  and runs the spiders on an overlay over the map canvas.
+- **ArcSkin** (`arcskin.py`). The object names of ArcSkin's title row and coordinate
+  box; nothing from ArcSkin is imported.
 
 Every part has a `remove()` method and is taken off when the skin is switched off
 or the plugin is unloaded.
@@ -187,6 +196,10 @@ do QGIS. Układ okna QGIS się nie zmienia, a skórkę wyłącza się jednym kli
 - Krój [Nosifer](https://fonts.google.com/specimen/Nosifer) na pasku menu,
   w tytułach paneli i nagłówkach strony powitalnej.
 - Pajęczyna nad ikonami wtyczek EnviroSolutions po najechaniu myszą.
+- Współpraca z wtyczką [ArcSkin](https://github.com/envirosolutionspl/arcskin):
+  kolory Halloween nakładają się na wstążkę, dynie, nietoperze i duszki przenoszą
+  się na jej wiersz tytułowy, a niespodzianka działa także w polu współrzędnych
+  ArcSkin.
 - Halloweenowe kursory narzędzi mapy i ukryta niespodzianka z pająkami.
 - Strzałki, pola wyboru, przełączniki i gałęzie drzew rysowane dla każdego motywu.
 - Interfejs angielski i polski.
@@ -234,8 +247,9 @@ odinstaluj starą – QGIS trzyma załadowane moduły w pamięci.
 | Zwykły QGIS po ponownym starcie   | **Wtyczki → Zarządzaj wtyczkami… → Zainstalowane**, odznacz wtyczkę      |
 | Usunąć wtyczkę                    | To samo okno, zaznacz **Halloween Skin**, **Odinstaluj wtyczkę**         |
 
-Ustawienia są zapamiętywane. Wyłączenie skórki przywraca poprzedni arkusz stylów
-i paletę QGIS. Nic nie jest zapisywane w profilu QGIS, a projekty się nie zmieniają.
+Ustawienia są zapamiętywane. Wyłączenie skórki zdejmuje tylko jej część arkusza
+stylów i przywraca paletę QGIS; style innych wtyczek (np. ArcSkin) zostają. Nic nie
+jest zapisywane w profilu QGIS, a projekty się nie zmieniają.
 
 ## Licencja
 

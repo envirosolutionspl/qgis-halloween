@@ -472,9 +472,11 @@ QToolTip {
     color: #efe8f6;
 }
 
-/* --- Menu bar: the Halloween header (dark gradient, pumpkins, bats) --- */
+/* --- Menu bar: the Halloween header (dark gradient, pumpkins, bats).
+   ArcSkin hides the menu bar; its title row gets the header instead. --- */
 
-QMenuBar {
+QMenuBar,
+QWidget#ArcSkinTitleRow {
     background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
                                       stop: 0 #160c22,
                                       stop: 1 #2d1246);

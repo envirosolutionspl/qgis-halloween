@@ -18,6 +18,7 @@ import math
 import random
 import re
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (QElapsedTimer, QEvent, QObject, QPointF, Qt,
                               QTimer)
 from qgis.PyQt.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
@@ -340,17 +341,23 @@ class MenuBarDecoration(QObject):
     """Animated drawings over the menu bar in one of the :data:`MODES`.
 
     Owns a transparent overlay widget and the frame timer, and follows the
-    menu bar's size through an event filter.
+    menu bar's size through an event filter. While the menu bar is hidden
+    (ArcSkin puts a ribbon in its place) the overlay moves to a stand-in
+    widget if one is given, and the timer rests otherwise.
     """
 
-    def __init__(self, menubar, mode="flight"):
+    def __init__(self, menubar, mode="flight", stand_in=None):
         """Create and show the overlay.
 
         :param menubar: the main window's :class:`QMenuBar`.
         :param mode: one of :data:`MODES`.
+        :param stand_in: callable returning the widget to draw on while
+            the menu bar is hidden (ArcSkin's title row), or ``None``.
         """
         super().__init__(menubar)
         self.menubar = menubar
+        self.stand_in = stand_in
+        self.host = menubar  # the widget the overlay sits on
         self.overlay = _Overlay(menubar, self)
         self.clock = QElapsedTimer()
         self.clock.start()
@@ -361,6 +368,7 @@ class MenuBarDecoration(QObject):
         menubar.installEventFilter(self)
         self.set_mode(mode)
         self.overlay.show()
+        self.rehost()
 
     def set_mode(self, mode):
         """Switch to another animation mode (unknown modes mean ``flight``).
@@ -369,7 +377,7 @@ class MenuBarDecoration(QObject):
         """
         self.mode = mode if mode in MODES else "flight"
         self.animate = self.mode != "off"
-        rect = self.menubar.rect()
+        rect = self.host.rect()
         rnd = random.Random()
         self.flyers = []
         if self.mode == "flight":
@@ -381,10 +389,7 @@ class MenuBarDecoration(QObject):
                                          pumpkins_only=self.mode == "flight")
         self.place()
         self.last = self.seconds()
-        if self.animate:
-            self.timer.start()
-        else:
-            self.timer.stop()
+        self.run_timer()
         self.overlay.update()
 
     def seconds(self):
@@ -401,8 +406,8 @@ class MenuBarDecoration(QObject):
         self.overlay.update()
 
     def place(self):
-        """Fit the overlay to the whole menu bar or to its right end."""
-        rect = self.menubar.rect()
+        """Fit the overlay to the whole host or to its right end."""
+        rect = self.host.rect()
         if self.mode == "flight":
             width = rect.width()
             for flyer in self.flyers:
@@ -413,10 +418,50 @@ class MenuBarDecoration(QObject):
                                  width, rect.height())
         self.overlay.raise_()
 
+    def run_timer(self):
+        """Run the frame timer only while there is something to show."""
+        if self.animate and not self.host.isHidden():
+            self.timer.start()
+        else:
+            self.timer.stop()
+
+    def rehost(self):
+        """Sit on the menu bar, or on the stand-in while the bar is hidden.
+
+        ArcSkin hides the menu bar before it builds its title row, so a
+        hidden bar is followed up on the event loop's next turn; the way
+        back is taken at once, before ArcSkin's widgets are deleted.
+        """
+        if sip.isdeleted(self):
+            return  # removed while the deferred call was waiting
+        host = self.menubar
+        if self.menubar.isHidden() and self.stand_in is not None:
+            host = self.stand_in() or self.menubar
+        if sip.isdeleted(self.overlay):  # went down with its host
+            self.overlay = _Overlay(host, self)
+            self.overlay.items = decorations(
+                BAND_WIDTH, pumpkins_only=self.mode == "flight")
+        if host is not self.host:
+            if (self.host is not self.menubar
+                    and not sip.isdeleted(self.host)):
+                self.host.removeEventFilter(self)
+            if host is not self.menubar:
+                host.installEventFilter(self)
+            self.host = host
+            self.overlay.setParent(host)
+        self.overlay.show()
+        self.place()
+        self.run_timer()
+
     def eventFilter(self, obj, event):  # noqa: N802 (Qt API name)
-        """Refit the overlay when the menu bar is resized or shown."""
-        if obj is self.menubar and event.type() in (
-                QEvent.Type.Resize, QEvent.Type.Show):
+        """Follow the host's size and the menu bar being hidden or shown."""
+        kind = event.type()
+        if obj is self.menubar and kind == QEvent.Type.Hide:
+            QTimer.singleShot(0, self.rehost)
+        elif obj is self.menubar and kind == QEvent.Type.Show:
+            self.rehost()
+        elif obj is self.host and kind in (QEvent.Type.Resize,
+                                           QEvent.Type.Show):
             self.place()
         return False
 
@@ -424,8 +469,11 @@ class MenuBarDecoration(QObject):
         """Stop the animation and delete the overlay and this object."""
         self.timer.stop()
         self.menubar.removeEventFilter(self)
-        self.overlay.hide()
-        self.overlay.deleteLater()
+        if self.host is not self.menubar and not sip.isdeleted(self.host):
+            self.host.removeEventFilter(self)
+        if not sip.isdeleted(self.overlay):
+            self.overlay.hide()
+            self.overlay.deleteLater()
         self.deleteLater()
 
 

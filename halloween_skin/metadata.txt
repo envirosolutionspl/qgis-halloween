@@ -4,8 +4,8 @@ qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 supportsQt6=True
 description=Halloween look for QGIS: pumpkin orange, violet and a dark menu bar with pumpkins, bats and ghosts. Light and dark variants, switched off with one click.
-about=Gives the standard QGIS interface a Halloween theme (the Halloween skin of EnviroSolutions' MAIP application): a light variant with white and pale violet surfaces and a dark variant with deep violet surfaces, both with a pumpkin-orange accent and a dark menu bar decorated with animated pumpkins, bats and ghosts (the animation can be switched off). The layout of QGIS is not changed. Switching the skin off restores the previous style sheet and palette. English and Polish.
-version=1.0
+about=Gives the standard QGIS interface a Halloween theme (the Halloween skin of EnviroSolutions' MAIP application): a light variant with white and pale violet surfaces and a dark variant with deep violet surfaces, both with a pumpkin-orange accent and a dark menu bar decorated with animated pumpkins, bats and ghosts (the animation can be switched off). The layout of QGIS is not changed. Switching the skin off removes its style sheet rules and restores the palette; it works alongside ArcSkin. English and Polish.
+version=1.1
 author=EnviroSolutions
 email=office@envirosolutions.pl
 
@@ -14,6 +14,7 @@ repository=https://github.com/envirosolutionspl/qgis-halloween
 homepage=https://github.com/envirosolutionspl/qgis-halloween
 
 changelog=
+    1.1 - Works alongside ArcSkin: the Halloween style sheet is appended to the application's as a marked block instead of replacing it, and only that block is removed on switching off, so ArcSkin's ribbon keeps its style in whichever order the two plugins are switched; a sheet replaced by another plugin gets the block back (or loses a stale copy while the skin is off); the pumpkins, bats and ghosts move to the ribbon's title row while the menu bar is hidden; the easter egg also answers in ArcSkin's coordinate box and the spider web reaches the ribbon's Add-ins buttons.
     1.0 - First release: Halloween Light and Halloween Dark themes; a dark menu bar with pumpkins, bats and ghosts, animated as in MAIP (flying across the menu bar, in place, or off); the Nosifer face on the menu bar, pane titles and welcome-page headings; Halloween cursors for Pan, Select Features, Zoom In, Zoom Out and Identify; a spider web over EnviroSolutions plugin icons on hover; a spider easter egg (type halloween into the coordinate box and press Enter). The on/off switch, theme and animation mode are remembered.
 
 tags=theme,skin,ui,look and feel,halloween,dark
