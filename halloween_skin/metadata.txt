@@ -1,0 +1,31 @@
+[general]
+name=Halloween Skin
+qgisMinimumVersion=3.40
+qgisMaximumVersion=4.99
+supportsQt6=True
+description=Halloween look for QGIS: pumpkin orange, violet and a dark menu bar with pumpkins, bats and ghosts. Light and dark variants, switched off with one click.
+about=Gives the standard QGIS interface a Halloween theme (the Halloween skin of EnviroSolutions' MAIP application): a light variant with white and pale violet surfaces and a dark variant with deep violet surfaces, both with a pumpkin-orange accent and a dark menu bar decorated with animated pumpkins, bats and ghosts (the animation can be switched off). The layout of QGIS is not changed. Switching the skin off restores the previous style sheet and palette. English and Polish.
+version=1.5.1
+author=EnviroSolutions
+email=office@envirosolutions.pl
+
+tracker=https://github.com/envirosolutionspl/qgis-halloween/issues
+repository=https://github.com/envirosolutionspl/qgis-halloween
+homepage=https://github.com/envirosolutionspl/qgis-halloween
+
+changelog=
+    1.5.1 - The easter egg finds QGIS's coordinate box (it has no object name) and the tool cursors recognise the tools by their Qt objects, so both work in QGIS.
+    1.5.0 - Map tools keep their icons and get Halloween cursors instead (ghost, broom, pumpkins, bat); the splash screen option is gone (QGIS's own splash stays); smaller Nosifer size on the menu bar and pane titles.
+    1.4.1 - The easter egg answers to the word halloween only.
+    1.4.0 - Easter egg: type halloween into the coordinate box and press Enter - four black spiders come down from the top of the map view on their threads, hang swaying and climb back.
+    1.3.0 - Nosifer face on the menu bar, pane titles and welcome-page headings; Halloween icons for Pan, Select Features, Zoom In, Zoom Out and Identify (cursors since 1.5.0); a spider web over EnviroSolutions plugin icons on hover.
+    1.2.0 - Animation modes under Plugins → Halloween Skin → Animation: off, in place as in MAIP, or (default) bats and ghosts flying across the whole menu bar on wavy courses while the pumpkins stay at the right.
+    1.1.0 - The menu-bar decoration is animated as in MAIP: bats flap, ghosts float, pumpkins pulse and their faces flicker; Plugins → Halloween Skin → Animation switches it off.
+    1.0.0 - Halloween Light and Halloween Dark, chosen under Plugins → Halloween Skin; the choice and the on/off switch are remembered.
+
+tags=theme,skin,ui,look and feel,halloween,dark
+category=Plugins
+icon=icons/icon.svg
+experimental=False
+deprecated=False
+server=False

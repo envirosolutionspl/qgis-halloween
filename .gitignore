@@ -1,0 +1,20 @@
+# Build output
+dist/
+*.zip
+
+# Test previews
+tests/out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and systems
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
