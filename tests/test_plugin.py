@@ -5,8 +5,8 @@ import unittest
 
 import qgis_stub
 from qgis_stub import FakeIface, QgsSettings, app
-from PyQt5.QtGui import QFontDatabase, QPalette
-from PyQt5.QtWidgets import QWidget
+from qgis.PyQt.QtGui import QFontDatabase, QPalette
+from qgis.PyQt.QtWidgets import QWidget
 
 from halloween_skin import classFactory, plugin
 
@@ -110,7 +110,9 @@ class PluginTest(unittest.TestCase):
         self.assertIn("Nosifer", self.app.styleSheet())
         self.assertIsNotNone(self.plugin.decoration)
         self.assertEqual(len(self.iface.plugin_menus[plugin.MENU_NAME]), 3)
-        self.assertIn("Nosifer", QFontDatabase().families())
+        families = (QFontDatabase.families() if qgis_stub.QT6
+                    else QFontDatabase().families())
+        self.assertIn("Nosifer", families)
 
     def test_off_restores_style_and_palette(self):
         """Switching off puts back what the application had."""

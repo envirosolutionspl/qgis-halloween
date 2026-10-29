@@ -4,9 +4,10 @@ import unittest
 
 import qgis_stub
 from qgis_stub import OUT, PLUGIN_METADATA, FakeIface, app
-from PyQt5.QtCore import QEvent, QSize, Qt
-from PyQt5.QtGui import QColor, QIcon, QImage, QKeyEvent, QPixmap
-from PyQt5.QtWidgets import QAction, QToolBar, QToolButton
+from qgis.PyQt.QtCore import QEvent, QSize, Qt
+from qgis.PyQt.QtGui import (QAction, QColor, QIcon, QImage, QKeyEvent,
+                             QPixmap)
+from qgis.PyQt.QtWidgets import QToolBar, QToolButton
 
 from halloween_skin import cursors, icons, spiders
 

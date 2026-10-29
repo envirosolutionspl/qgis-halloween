@@ -1,5 +1,10 @@
 # Halloween Skin for QGIS 🎃
 
+[![Tests](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/tests.yml/badge.svg)](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/tests.yml)
+[![Qt5 and Qt6 compatibility](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/qt5-qt6-compat.yml/badge.svg)](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/qt5-qt6-compat.yml)
+[![Security and quality](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/security_and_quality.yml/badge.svg)](https://github.com/envirosolutionspl/qgis-halloween/actions/workflows/security_and_quality.yml)
+[![Release](https://img.shields.io/github/v/release/envirosolutionspl/qgis-halloween)](https://github.com/envirosolutionspl/qgis-halloween/releases/latest)
+
 > **The first plugin that brings an animated skin to QGIS**, from QGIS 3.40 up to
 > QGIS 4.x: bats flap, ghosts float and pumpkins glow on the QGIS menu bar.
 
@@ -124,7 +129,7 @@ scripts/
 tests/                   offscreen tests with a stand-in qgis package
 ```
 
-The tests run without QGIS, on PyQt5:
+The tests run without QGIS, on PyQt5 or PyQt6:
 
 ```bash
 pip install PyQt5 flake8 flake8-docstrings pep8-naming
@@ -132,6 +137,12 @@ flake8
 sh tests/run_all.sh
 python scripts/package.py
 ```
+
+The same checks run on GitHub for every push and pull request: the tests in
+the `qgis/qgis` Docker images (3.40, LTR, stable and latest), the
+[pyqgis4-checker](https://github.com/qgis/pyqgis4-checker) for Qt 5 / Qt 6
+compatibility, and flake8, Bandit and detect-secrets. Pushing a tag `v<version>`
+that matches `metadata.txt` builds the ZIP and publishes a GitHub release.
 
 The tests write previews of the menu bar, the spider web and the spiders to
 `tests/out/`. They do not replace a check in QGIS itself: install the ZIP in
@@ -143,7 +154,7 @@ CSS or animation). Generated pictures are changed in the scripts, not by hand; t
 tests check that the files match the scripts.
 
 To release a new version, raise `version` in `halloween_skin/metadata.txt`, add an
-entry at the top of `changelog`, update this README and build the ZIP.
+entry at the top of `changelog`, update this README and push the tag `v<version>`.
 
 ## Licence
 

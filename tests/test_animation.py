@@ -4,9 +4,9 @@ import unittest
 
 import qgis_stub
 from qgis_stub import OUT, app
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QImage, QPainter
-from PyQt5.QtWidgets import QMenuBar
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QColor, QImage, QPainter
+from qgis.PyQt.QtWidgets import QMenuBar
 
 from halloween_skin import animation, plugin
 

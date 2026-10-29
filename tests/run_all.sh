@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run the test suite without QGIS (needs: pip install PyQt5).
+# Run the test suite without QGIS (needs PyQt5 or PyQt6).
 # Previews of the menu bar, web and spiders are written to tests/out/.
 set -e
 cd "$(dirname "$0")"

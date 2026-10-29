@@ -1,10 +1,11 @@
 """A stand-in ``qgis`` package for running the tests without QGIS.
 
 Importing this module registers ``qgis``, ``qgis.core``, ``qgis.utils``
-and ``qgis.PyQt.*`` in :data:`sys.modules`, built on PyQt5:
+and ``qgis.PyQt.*`` in :data:`sys.modules`, built on PyQt5 or, when PyQt5
+is not installed (QGIS 4), on PyQt6:
 
-* ``qgis.PyQt.QtGui`` also exports ``QAction`` and ``QActionGroup``, as in
-  Qt 6 (and in the real ``qgis.PyQt``);
+* ``qgis.PyQt.QtGui`` exports ``QAction`` and ``QActionGroup`` with both,
+  as the real ``qgis.PyQt`` does;
 * ``qgis.core`` has an in-memory :class:`QgsSettings`, a
   :class:`QgsApplication` with ``getThemeCursor`` and a minimal ``Qgis``;
 * ``qgis.utils`` has an empty ``plugins`` dict and ``pluginMetadata``
@@ -22,7 +23,12 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5 import QtCore, QtGui, QtSvg, QtWidgets, sip  # noqa: E402
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets, sip
+    QT6 = False
+except ImportError:
+    from PyQt6 import QtCore, QtGui, QtWidgets, sip
+    QT6 = True
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(__file__).resolve().parent / "out"
@@ -87,13 +93,13 @@ def install():
     """Register the stand-in modules (idempotent)."""
     if "qgis" in sys.modules:
         return
-    QtGui.QAction = QtWidgets.QAction
-    QtGui.QActionGroup = QtWidgets.QActionGroup
+    if not QT6:
+        QtGui.QAction = QtWidgets.QAction
+        QtGui.QActionGroup = QtWidgets.QActionGroup
     pyqt = _module("qgis.PyQt", QtCore=QtCore, QtGui=QtGui,
-                   QtWidgets=QtWidgets, QtSvg=QtSvg, sip=sip)
+                   QtWidgets=QtWidgets, sip=sip)
     for name, module in (("QtCore", QtCore), ("QtGui", QtGui),
-                         ("QtWidgets", QtWidgets), ("QtSvg", QtSvg),
-                         ("sip", sip)):
+                         ("QtWidgets", QtWidgets), ("sip", sip)):
         sys.modules["qgis.PyQt." + name] = module
     core = _module("qgis.core", QgsSettings=QgsSettings,
                    QgsApplication=QgsApplication,
@@ -196,7 +202,7 @@ class FakeIface:
         self.plugin_menus = {}
         self.actions = {}
         for name in self.TOOLS:
-            action = QtWidgets.QAction(name, self.window)
+            action = QtGui.QAction(name, self.window)
             self.actions[name] = action
             setattr(self, "action" + name,
                     lambda action=action: action)
