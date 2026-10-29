@@ -22,6 +22,9 @@ KEYWORDS = ("halloween",)
 COORDS_WIDGET = "QgsStatusBarCoordinatesWidget"
 FRAME_MS = 40
 SPIDERS = 4
+THREAD_PEN = QPen(QColor(70, 70, 70, 160), 1)
+BODY = QColor("#0b0b0b")
+EYES = QColor("#ffd23f")
 
 
 class Spider:
@@ -88,13 +91,12 @@ class Spider:
                                     + self.phase) * min(1, y / 80)
         x = self.x + sway
         s = self.size
-        painter.setPen(QPen(QColor(70, 70, 70, 160), 1))
+        painter.setPen(THREAD_PEN)
         painter.drawLine(QPointF(self.x, 0), QPointF(x, y))
         painter.save()
         painter.translate(x, y)
         painter.rotate(math.degrees(math.atan2(sway, max(y, 1))) * .5)
-        body = QColor("#0b0b0b")
-        painter.setPen(QPen(body, s * .11, Qt.PenStyle.SolidLine,
+        painter.setPen(QPen(BODY, s * .11, Qt.PenStyle.SolidLine,
                             Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         wiggle = math.sin(2 * math.pi * self.leg_speed * t + self.phase)
@@ -111,10 +113,10 @@ class Spider:
                 painter.drawLine(QPointF(0, 0), knee)
                 painter.drawLine(knee, foot)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(body)
+        painter.setBrush(BODY)
         painter.drawEllipse(QPointF(0, s * .3), s * .42, s * .55)   # abdomen
         painter.drawEllipse(QPointF(0, -s * .3), s * .3, s * .3)    # head
-        painter.setBrush(QColor("#ffd23f"))
+        painter.setBrush(EYES)
         painter.drawEllipse(QPointF(-s * .1, -s * .38), s * .06, s * .06)
         painter.drawEllipse(QPointF(s * .1, -s * .38), s * .06, s * .06)
         painter.restore()
@@ -140,6 +142,8 @@ class SpiderDrop(QWidget):
         rnd = random.Random()
         self.spiders = [Spider(rnd, self.width(), self.height(), i)
                         for i in range(SPIDERS)]
+        # The show is over a moment after the last spider has gone.
+        self.end = max(s.end for s in self.spiders) + .2
         self.clock = QElapsedTimer()
         self.clock.start()
         self.timer = QTimer(self)
@@ -156,7 +160,7 @@ class SpiderDrop(QWidget):
 
     def tick(self):
         """Repaint, or finish once every spider is gone."""
-        if self.seconds() > max(s.end for s in self.spiders) + .2:
+        if self.seconds() > self.end:
             self.finish()
             return
         self.update()
@@ -195,15 +199,15 @@ def coordinate_box(win):
     :param win: the QGIS main window.
     :returns: the :class:`QLineEdit`, or ``None``.
     """
+    fallback = None
     for edit in win.statusBar().findChildren(QLineEdit):
         parent = edit.parent()
         if parent is not None and (
                 parent.metaObject().className() == COORDS_WIDGET):
             return edit
-    for edit in win.statusBar().findChildren(QLineEdit):
-        if edit.metaObject().className() == "QLineEdit":
-            return edit  # not the locator's QgsFilterLineEdit
-    return None
+        if fallback is None and edit.metaObject().className() == "QLineEdit":
+            fallback = edit  # not the locator's QgsFilterLineEdit
+    return fallback
 
 
 class EasterEgg(QObject):
@@ -218,7 +222,7 @@ class EasterEgg(QObject):
         self.iface = iface
         self.box = coordinate_box(iface.mainWindow())  # QGIS's own box
         self.boxes = []  # every box watched: QGIS's and ArcSkin's
-        self.show = None
+        self.running = None  # the SpiderDrop on the map, if any
         self.attach()
 
     def attach(self):
@@ -248,13 +252,17 @@ class EasterEgg(QObject):
 
     def drop(self):
         """Start a new show, ending one still running."""
-        canvas = self.iface.mapCanvas()
-        if self.show is not None:
+        self._end_show()
+        self.running = SpiderDrop(self.iface.mapCanvas())
+
+    def _end_show(self):
+        """End the running show, if it has not deleted itself already."""
+        if self.running is not None:
             try:
-                self.show.finish()
-            except RuntimeError:
+                self.running.finish()
+            except RuntimeError:  # finished and deleted on its own
                 pass
-        self.show = SpiderDrop(canvas)
+            self.running = None
 
     def remove(self):
         """Stop watching the boxes and end a running show."""
@@ -264,10 +272,5 @@ class EasterEgg(QObject):
             except RuntimeError:  # gone with ArcSkin's footer
                 pass
         self.boxes = []
-        if self.show is not None:
-            try:
-                self.show.finish()
-            except RuntimeError:
-                pass
-            self.show = None
+        self._end_show()
         self.deleteLater()

@@ -149,7 +149,7 @@ class ArcSkinTest(unittest.TestCase):
         event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return,
                           Qt.KeyboardModifier.NoModifier)
         self.assertTrue(egg.eventFilter(other.coords, event))
-        self.assertIsNotNone(egg.show)
+        self.assertIsNotNone(egg.running)
         self.assertEqual(other.coords.text(), "")
 
     def test_webs_reach_ribbon_buttons(self):

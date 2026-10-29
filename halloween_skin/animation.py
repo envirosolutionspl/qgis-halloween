@@ -14,6 +14,7 @@ timer. Three modes:
   across the whole menu bar, each on its own wavy course.
 """
 
+import itertools
 import math
 import random
 import re
@@ -31,13 +32,25 @@ MAX_BATS = 3         # in flight at once
 MAX_GHOSTS = 1
 FLICKER = [(0, 1), (.18, .78), (.32, .95), (.47, .7), (.63, 1), (.81, .85),
            (1, 1)]  # CSS keyframes of the face: (time fraction, opacity)
+# Course of a flyer: ranges drawn at random for each flight, and how much
+# it banks with its wave.
+FLIGHT = {
+    "bat": {"first_wait": (0.2, 3.0), "wait": (0.5, 4.0),
+            "scale": (.36, .5), "speed": (70, 150), "amplitude": (3, 8),
+            "period": (1.0, 2.4), "bank": .8},
+    "ghost": {"first_wait": (2.0, 12.0), "wait": (6.0, 16.0),
+              "scale": (.3, .4), "speed": (22, 40), "amplitude": (1, 3),
+              "period": (3, 5), "bank": .3},
+}
+ARITY = {"M": 2, "L": 2, "C": 6, "S": 4, "Z": 0}  # numbers per SVG command
 
 
 def path(d):
     """Build a QPainterPath from SVG path data.
 
     Only the absolute commands used by the drawings are understood:
-    ``M``, ``L``, ``C``, ``S`` and ``Z``.
+    ``M``, ``L``, ``C``, ``S`` and ``Z``; numbers after a command's own
+    repeat it (after ``M`` they are lines, as in SVG).
 
     :param d: SVG path data, e.g. ``"M0 0 L10 0 Z"``.
     :returns: the equivalent :class:`QPainterPath`.
@@ -46,39 +59,32 @@ def path(d):
     tokens = re.findall(r"[MLCSZ]|-?\d*\.?\d+", d)
     i = 0
     cmd = None
-    last_ctrl = None
+    last_ctrl = None  # second control point of the previous curve
     while i < len(tokens):
-        if tokens[i] in "MLCSZ":
+        if tokens[i] in ARITY:
             cmd = tokens[i]
             i += 1
-            if cmd == "Z":
-                out.closeSubpath()
-                continue
-        nums = lambda n: [float(t) for t in tokens[i:i + n]]  # noqa: E731
-        if cmd == "M":
-            out.moveTo(*nums(2))
-            i += 2
+        n = ARITY[cmd]
+        args = [float(t) for t in tokens[i:i + n]]
+        i += n
+        if cmd == "Z":
+            out.closeSubpath()
+        elif cmd == "M":
+            out.moveTo(*args)
             cmd = "L"
         elif cmd == "L":
-            out.lineTo(*nums(2))
-            i += 2
-        elif cmd == "C":
-            x1, y1, x2, y2, x, y = nums(6)
-            out.cubicTo(x1, y1, x2, y2, x, y)
-            last_ctrl = (x2, y2)
-            i += 6
-        elif cmd == "S":
-            x2, y2, x, y = nums(4)
-            cur = out.currentPosition()
-            if last_ctrl:
-                x1, y1 = 2 * cur.x() - last_ctrl[0], 2 * cur.y() - last_ctrl[1]
-            else:
-                x1, y1 = cur.x(), cur.y()
-            out.cubicTo(x1, y1, x2, y2, x, y)
-            last_ctrl = (x2, y2)
-            i += 4
-        if cmd not in ("C", "S"):
-            last_ctrl = None
+            out.lineTo(*args)
+        else:
+            if cmd == "S":
+                cur = out.currentPosition()
+                first = ((2 * cur.x() - last_ctrl[0],
+                          2 * cur.y() - last_ctrl[1])
+                         if last_ctrl else (cur.x(), cur.y()))
+                args = [*first, *args]
+            out.cubicTo(*args)
+            last_ctrl = (args[2], args[3])
+            continue
+        last_ctrl = None
     return out
 
 
@@ -95,25 +101,41 @@ PUMPKIN_EYES = path("M-15 -7 L-8 -15 L-3 -6 Z M15 -7 L8 -15 L3 -6 Z")
 PUMPKIN_MOUTH = path("M-16 6 L-11 12 L-6 7 L0 13 L6 7 L11 12 L16 6 L13 15 "
                      "C6 20 -6 20 -13 15 Z")
 
+# Centres the animations transform about (CSS transform-origin: center).
+BAT_CENTRE = BAT_BODY.boundingRect().center()
+GHOST_CENTRE = GHOST_BODY.boundingRect().center()
+PUMPKIN_CENTRE = PUMPKIN_STEM.boundingRect().united(
+    PUMPKIN_RIBS.boundingRect()).adjusted(-18, 0, 18, 0).center()
+
+# Colours, pens and brushes of the drawings (MAIP's palette).
+BAT_FILL = QColor("#140a1c")
+BAT_PEN = QPen(QColor(139, 92, 196, 191), 1.4)
+GHOST_FILL = QColor(255, 255, 255, 242)
+FACE_DARK = QColor("#1a0f1f")
+EYES = QColor("#ffd23f")
+PUMPKIN_SIDE = QColor("#e2600c")
+PUMPKIN_FRONT = QColor("#ff7a1a")
+STEM_PEN = QPen(QColor("#3d5a1e"), 5, Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap)
+RIBS_PEN = QPen(PUMPKIN_SIDE, 2)
+
 
 class Cycle:
     """One repeating animation with its own period and phase.
 
     Mirrors a CSS animation in MAIP: the duration is drawn from a range and
-    a negative delay starts the cycle part-way through. The random numbers
-    are seeded from a counter, so the same set of decorations always moves
-    the same way (see :func:`decorations`).
+    a negative delay starts the cycle part-way through. A cycle given a
+    ``seed`` always moves the same way (see :func:`decorations`).
     """
 
-    counter = 0
-
-    def __init__(self, dur_range):
+    def __init__(self, dur_range, seed=None):
         """Draw the duration and the starting delay.
 
         :param dur_range: ``(shortest, longest)`` duration in seconds.
+        :param seed: number of the cycle in its set, as MAIP numbers them;
+            ``None`` draws freely.
         """
-        Cycle.counter += 1
-        rnd = random.Random(1000 + Cycle.counter)
+        rnd = random.Random(None if seed is None else 1000 + seed)
         self.duration = rnd.uniform(*dur_range)
         self.delay = -rnd.uniform(0, self.duration)
 
@@ -146,7 +168,7 @@ def flicker(fraction):
 class Decoration:
     """A drawing with its position, rotation, scale and animation cycles."""
 
-    def __init__(self, kind, x, y, scale, rot=0):
+    def __init__(self, kind, x, y, scale, rot=0, seeds=None):
         """Place the drawing and give it its animation cycles.
 
         :param kind: ``"pumpkin"``, ``"bat"`` or ``"ghost"``.
@@ -154,16 +176,22 @@ class Decoration:
         :param y: vertical position of the centre, in pixels.
         :param scale: size relative to the original drawing.
         :param rot: rotation in degrees.
+        :param seeds: iterator giving each cycle its seed, or ``None`` for
+            free cycles.
         """
         self.kind, self.x, self.y = kind, x, y
         self.scale, self.rot = scale, rot
+
+        def cycle(dur_range):
+            return Cycle(dur_range, None if seeds is None else next(seeds))
+
         if kind == "pumpkin":
-            self.pulse = Cycle((2.2, 3.0))
-            self.flicker = Cycle((1.4, 2.2))
+            self.pulse = cycle((2.2, 3.0))
+            self.flicker = cycle((1.4, 2.2))
         elif kind == "bat":
-            self.flap = Cycle((0.5, 0.8))
+            self.flap = cycle((0.5, 0.8))
         else:
-            self.float = Cycle((3.0, 4.5))
+            self.float = cycle((3.0, 4.5))
 
     def paint(self, painter, seconds, animate):
         """Paint the drawing.
@@ -180,28 +208,27 @@ class Decoration:
         painter.restore()
 
     @staticmethod
-    def _about_centre(painter, rect, transform):
-        """Apply ``transform`` about the centre of ``rect``.
+    def _about_centre(painter, centre, transform):
+        """Apply ``transform`` about ``centre``.
 
         This is CSS ``transform-box: fill-box; transform-origin: center``.
         """
-        c = rect.center()
-        painter.translate(c)
+        painter.translate(centre)
         painter.setTransform(transform, True)
-        painter.translate(-c)
+        painter.translate(-centre)
 
     def _bat(self, painter, seconds):
         """Paint a bat; its wings flap unless ``seconds`` is ``None``."""
         if seconds is not None:
             sy = 1 - 0.58 * self.flap.eased(seconds)
-            self._about_centre(painter, BAT_BODY.boundingRect(),
+            self._about_centre(painter, BAT_CENTRE,
                                QTransform().scale(1, sy))
-        painter.setPen(QPen(QColor(139, 92, 196, 191), 1.4))
-        painter.setBrush(QColor("#140a1c"))
+        painter.setPen(BAT_PEN)
+        painter.setBrush(BAT_FILL)
         painter.drawPath(BAT_BODY)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPath(BAT_EARS)
-        painter.setBrush(QColor("#ffd23f"))
+        painter.setBrush(EYES)
         painter.drawEllipse(QPointF(-1.3, -4), .9, .9)
         painter.drawEllipse(QPointF(1.3, -4), .9, .9)
 
@@ -210,40 +237,38 @@ class Decoration:
         if seconds is not None:
             e = self.float.eased(seconds)
             self._about_centre(
-                painter, GHOST_BODY.boundingRect(),
+                painter, GHOST_CENTRE,
                 QTransform().translate(0, -5 * e).rotate(-2 + 4 * e))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 242))
+        painter.setBrush(GHOST_FILL)
         painter.drawPath(GHOST_BODY)
-        painter.setBrush(QColor("#1a0f1f"))
+        painter.setBrush(FACE_DARK)
         painter.drawEllipse(QPointF(-6, -6), 3, 4.5)
         painter.drawEllipse(QPointF(6, -6), 3, 4.5)
         painter.drawEllipse(QPointF(0, 5), 3.5, 4)
 
     def _pumpkin(self, painter, seconds):
         """Paint a pumpkin; it pulses and flickers if ``seconds`` is set."""
-        body = PUMPKIN_STEM.boundingRect().united(
-            PUMPKIN_RIBS.boundingRect()).adjusted(-18, 0, 18, 0)
         if seconds is not None:
             s = 1 + 0.045 * self.pulse.eased(seconds)
-            self._about_centre(painter, body, QTransform().scale(s, s))
-        painter.setPen(QPen(QColor("#3d5a1e"), 5, Qt.PenStyle.SolidLine,
-                            Qt.PenCapStyle.RoundCap))
+            self._about_centre(painter, PUMPKIN_CENTRE,
+                               QTransform().scale(s, s))
+        painter.setPen(STEM_PEN)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(PUMPKIN_STEM)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#e2600c"))
+        painter.setBrush(PUMPKIN_SIDE)
         painter.drawEllipse(QPointF(-16, 0), 18, 24)
         painter.drawEllipse(QPointF(16, 0), 18, 24)
-        painter.setBrush(QColor("#ff7a1a"))
+        painter.setBrush(PUMPKIN_FRONT)
         painter.drawEllipse(QPointF(0, 0), 20, 26)
-        painter.setPen(QPen(QColor("#e2600c"), 2))
+        painter.setPen(RIBS_PEN)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(PUMPKIN_RIBS)
         if seconds is not None:
             painter.setOpacity(flicker(self.flicker.phase(seconds)))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#ffd23f"))
+        painter.setBrush(EYES)
         painter.drawPath(PUMPKIN_EYES)
         painter.drawPath(PUMPKIN_MOUTH)
 
@@ -251,18 +276,21 @@ class Decoration:
 def decorations(width, pumpkins_only=False):
     """Lay out MAIP's menu-bar set of drawings.
 
+    The animation cycles are numbered 1, 2, ... in the order of the set,
+    as in MAIP, so the set always moves the same way.
+
     :param width: width of the band the set is right-aligned in.
     :param pumpkins_only: keep only the pumpkins (the ``flight`` mode,
         where bats and ghosts fly separately).
     :returns: a list of :class:`Decoration`.
     """
-    Cycle.counter = 0
+    seeds = itertools.count(1)
     right = width - 16
-    items = [Decoration("pumpkin", right - 212, 21, .34),
-             Decoration("bat", right - 166, 15, .46, -10),
-             Decoration("ghost", right - 118, 18, .4, 8),
-             Decoration("bat", right - 76, 20, .38, 12),
-             Decoration("pumpkin", right - 30, 21, .34)]
+    items = [Decoration("pumpkin", right - 212, 21, .34, 0, seeds),
+             Decoration("bat", right - 166, 15, .46, -10, seeds),
+             Decoration("ghost", right - 118, 18, .4, 8, seeds),
+             Decoration("bat", right - 76, 20, .38, 12, seeds),
+             Decoration("pumpkin", right - 30, 21, .34, 0, seeds)]
     if pumpkins_only:
         items = [i for i in items if i.kind == "pumpkin"]
     return items
@@ -284,25 +312,24 @@ class Flyer:
         :param height: height of the menu bar in pixels.
         """
         self.kind, self.rnd = kind, rnd
+        self.spec = FLIGHT[kind]
         self.width, self.height = width, height
         self.item = Decoration(kind, 0, 0, 1)
-        self.wait = rnd.uniform(0.2, 3.0) if kind == "bat" \
-            else rnd.uniform(2.0, 12.0)
+        self.wait = rnd.uniform(*self.spec["first_wait"])
         self.alive = False
 
     def launch(self):
         """Start a new flight: random size, side, speed, height and wave."""
-        rnd = self.rnd
-        bat = self.kind == "bat"
-        self.item.scale = rnd.uniform(.36, .5) if bat else rnd.uniform(.3, .4)
+        rnd, spec = self.rnd, self.spec
+        self.item.scale = rnd.uniform(*spec["scale"])
         self.margin = 40 * self.item.scale + 10
         self.direction = rnd.choice((-1, 1))
         self.x = -self.margin if self.direction > 0 \
             else self.width + self.margin
-        self.speed = rnd.uniform(70, 150) if bat else rnd.uniform(22, 40)
+        self.speed = rnd.uniform(*spec["speed"])
         self.base_y = rnd.uniform(12, self.height - 10)
-        self.amplitude = rnd.uniform(3, 8) if bat else rnd.uniform(1, 3)
-        self.period = rnd.uniform(1.0, 2.4) if bat else rnd.uniform(3, 5)
+        self.amplitude = rnd.uniform(*spec["amplitude"])
+        self.period = rnd.uniform(*spec["period"])
         self.phase = rnd.uniform(0, 6.283)
         self.time = 0.0
         self.alive = True
@@ -323,13 +350,11 @@ class Flyer:
         self.item.y = self.base_y + wave
         # Tilt with the course (bats bank, ghosts barely).
         tilt = math.degrees(math.atan2(slope, self.speed))
-        self.item.rot = self.direction * tilt * (.8 if self.kind == "bat"
-                                                 else .3)
+        self.item.rot = self.direction * tilt * self.spec["bank"]
         if (self.direction > 0 and self.x > self.width + self.margin) or (
                 self.direction < 0 and self.x < -self.margin):
             self.alive = False
-            self.wait = self.rnd.uniform(0.5, 4.0) if self.kind == "bat" \
-                else self.rnd.uniform(6.0, 16.0)
+            self.wait = self.rnd.uniform(*self.spec["wait"])
 
     def paint(self, painter, seconds):
         """Paint the flyer if it is in flight."""
@@ -385,12 +410,15 @@ class MenuBarDecoration(QObject):
                            for _ in range(MAX_BATS)]
             self.flyers += [Flyer("ghost", rnd, rect.width(), rect.height())
                             for _ in range(MAX_GHOSTS)]
-        self.overlay.items = decorations(BAND_WIDTH,
-                                         pumpkins_only=self.mode == "flight")
+        self.overlay.items = self._set_items()
         self.place()
         self.last = self.seconds()
         self.run_timer()
         self.overlay.update()
+
+    def _set_items(self):
+        """Return the drawings at the right end for the current mode."""
+        return decorations(BAND_WIDTH, pumpkins_only=self.mode == "flight")
 
     def seconds(self):
         """Return the time since the decoration was created, in seconds."""
@@ -439,8 +467,7 @@ class MenuBarDecoration(QObject):
             host = self.stand_in() or self.menubar
         if sip.isdeleted(self.overlay):  # went down with its host
             self.overlay = _Overlay(host, self)
-            self.overlay.items = decorations(
-                BAND_WIDTH, pumpkins_only=self.mode == "flight")
+            self.overlay.items = self._set_items()
         if host is not self.host:
             if (self.host is not self.menubar
                     and not sip.isdeleted(self.host)):

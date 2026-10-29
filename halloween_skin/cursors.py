@@ -11,9 +11,10 @@ back.
 from pathlib import Path
 
 from qgis.core import QgsApplication
-from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QObject, Qt
 from qgis.PyQt.QtGui import QAction, QCursor, QIcon
+
+from .qtutil import address, same
 
 ICON_DIR = Path(__file__).resolve().parent / "icons"
 SIZE = 32
@@ -31,22 +32,6 @@ TOOLS = (
     ("actionIdentify", "mActionIdentify", "tool_identify.svg", (16, 17),
      "Identify"),
 )
-
-
-def same(a, b):
-    """Tell whether two Python wrappers stand for the same Qt object.
-
-    PyQt may hand out different wrappers for one C++ object, so wrappers
-    are compared by the address of the object they wrap.
-
-    :returns: ``False`` if either is ``None``.
-    """
-    if a is None or b is None:
-        return False
-    try:
-        return sip.unwrapinstance(a) == sip.unwrapinstance(b)
-    except (TypeError, RuntimeError):
-        return a is b
 
 
 def _action(iface, accessor, object_name):
@@ -106,11 +91,14 @@ class ToolCursors(QObject):
         super().__init__(iface.mainWindow())
         self.iface = iface
         self.canvas = iface.mapCanvas()
-        self.by_action = []  # (action, picture, hot spot, QGIS's cursor)
+        # (action, Halloween cursor, QGIS's cursor); the pictures are
+        # rendered once here, not on every change of tool.
+        self.by_action = []
         for accessor, name, file, hot, default in TOOLS:
             action = _action(iface, accessor, name)
             if action is not None:
-                self.by_action.append((action, file, hot, default))
+                self.by_action.append(
+                    (action, halloween_cursor(file, hot), default))
         self.touched = {}  # C++ address of the tool -> (tool, QGIS cursor)
         self.canvas.mapToolSet.connect(self.on_tool)
         self.on_tool(self.canvas.mapTool(), None)
@@ -133,16 +121,11 @@ class ToolCursors(QObject):
                      None)
         if entry is None:
             return
-        _, file, hot, default = entry
-        cursor = halloween_cursor(file, hot)
+        _, cursor, default = entry
         tool.setCursor(cursor)
         if same(self.canvas.mapTool(), tool):
             self.canvas.setCursor(cursor)
-        try:
-            key = sip.unwrapinstance(tool)
-        except (TypeError, RuntimeError):
-            key = id(tool)
-        self.touched[key] = (tool, default)
+        self.touched[address(tool)] = (tool, default)
 
     def remove(self):
         """Stop watching the canvas and restore QGIS's cursors."""

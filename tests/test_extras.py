@@ -161,7 +161,7 @@ class EasterEggTest(unittest.TestCase):
         """*halloween* and Enter drop the spiders and clear the box."""
         egg = spiders.EasterEgg(self.iface)
         self.assertTrue(self.press_enter(egg, " Halloween "))
-        self.assertIsNotNone(egg.show)
+        self.assertIsNotNone(egg.running)
         self.assertEqual(egg.box.text(), "")
         egg.remove()
 
@@ -169,7 +169,7 @@ class EasterEggTest(unittest.TestCase):
         """Anything else reaches QGIS untouched."""
         egg = spiders.EasterEgg(self.iface)
         self.assertFalse(self.press_enter(egg, "21.0,52.2"))
-        self.assertIsNone(egg.show)
+        self.assertIsNone(egg.running)
         self.assertEqual(egg.box.text(), "21.0,52.2")
         egg.remove()
 

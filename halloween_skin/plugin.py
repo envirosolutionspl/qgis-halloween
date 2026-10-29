@@ -35,6 +35,11 @@ from .spiders import EasterEgg
 PLUGIN_DIR = Path(__file__).resolve().parent
 THEMES_DIR = PLUGIN_DIR / "themes"
 THEMES = ("Halloween Light", "Halloween Dark")
+# Animation modes and their menu captions, in menu order.
+ANIMATIONS = (("off", "Off"), ("gentle", "In place, as in MAIP"),
+              ("flight", "Flying across the menu bar"))
+# What the skin adds while it is on, in the order it is taken off again.
+PARTS = ("decoration", "webs", "egg", "cursors")
 MENU_NAME = "&Halloween Skin"
 ENABLED_KEY = "halloween_skin/enabled"
 THEME_KEY = "halloween_skin/theme"
@@ -129,6 +134,35 @@ def with_skin(sheet, theme):
     base = without_skin(sheet)
     block = "\n".join((MARK_BEGIN, load_style(theme), MARK_END))
     return base + "\n" + block if base else block
+
+
+def choice_menu(title, choices, current, on_choose, parent):
+    """Build a menu of exclusive, checkable choices.
+
+    :param title: the menu's caption (translated).
+    :param choices: ``(value, caption)`` pairs; captions are translated.
+    :param current: the value checked at first.
+    :param on_choose: called with the value of the choice clicked.
+    :param parent: parent widget of the menu.
+    :returns: the :class:`QMenu`.
+    """
+    menu = QMenu(title, parent)
+    group = QActionGroup(menu)
+    group.setExclusive(True)
+    for value, caption in choices:
+        action = QAction(tr(caption), menu, checkable=True)
+        action.setData(value)
+        action.setChecked(value == current)
+        group.addAction(action)
+        menu.addAction(action)
+    group.triggered.connect(lambda action: on_choose(action.data()))
+    return menu
+
+
+def check(menu, value):
+    """Check the choice of ``menu`` that holds ``value``, uncheck others."""
+    for action in menu.actions():
+        action.setChecked(action.data() == value)
 
 
 def load_palette(theme, base):
@@ -226,37 +260,17 @@ class HalloweenSkinPlugin:
                               tr("Halloween look"), win, checkable=True)
         self.action.toggled.connect(self.set_enabled)
         self.iface.addPluginToMenu(MENU_NAME, self.action)
-        self.theme_menu = QMenu(tr("Theme"), win)
-        group = QActionGroup(self.theme_menu)
-        group.setExclusive(True)
-        chosen = self.theme()
-        for name in THEMES:
-            action = QAction(tr(name), self.theme_menu, checkable=True)
-            action.setData(name)
-            action.setChecked(name == chosen)
-            group.addAction(action)
-            self.theme_menu.addAction(action)
-        group.triggered.connect(lambda action: self.set_theme(action.data()))
+        self.theme_menu = choice_menu(
+            tr("Theme"), [(name, name) for name in THEMES], self.theme(),
+            self.set_theme, win)
         self.iface.addPluginToMenu(MENU_NAME, self.theme_menu.menuAction())
-        settings = QgsSettings()
-        self.animation_menu = QMenu(tr("Animation"), win)
-        modes = QActionGroup(self.animation_menu)
-        modes.setExclusive(True)
-        for mode, caption in (("off", "Off"),
-                              ("gentle", "In place, as in MAIP"),
-                              ("flight", "Flying across the menu bar")):
-            action = QAction(tr(caption), self.animation_menu,
-                             checkable=True)
-            action.setData(mode)
-            action.setChecked(mode == self.animation_mode())
-            modes.addAction(action)
-            self.animation_menu.addAction(action)
-        modes.triggered.connect(lambda action: self.set_animated(
-            action.data()))
+        self.animation_menu = choice_menu(
+            tr("Animation"), ANIMATIONS, self.animation_mode(),
+            self.set_animated, win)
         self.iface.addPluginToMenu(MENU_NAME,
                                    self.animation_menu.menuAction())
         self.sync = StyleSync(win, self.resync)
-        if settings.value(ENABLED_KEY, True, type=bool):
+        if QgsSettings().value(ENABLED_KEY, True, type=bool):
             self.action.setChecked(True)
 
     def unload(self):
@@ -295,8 +309,7 @@ class HalloweenSkinPlugin:
         if theme not in THEMES:
             return
         QgsSettings().setValue(THEME_KEY, theme)
-        for action in self.theme_menu.actions():
-            action.setChecked(action.data() == theme)
+        check(self.theme_menu, theme)
         if self.active:
             self._apply(theme)
 
@@ -318,8 +331,7 @@ class HalloweenSkinPlugin:
         if mode not in MODES:
             return
         QgsSettings().setValue(ANIMATION_KEY, mode)
-        for action in self.animation_menu.actions():
-            action.setChecked(action.data() == mode)
+        check(self.animation_menu, mode)
         if self.decoration is not None:
             self.decoration.set_mode(mode)
 
@@ -353,14 +365,9 @@ class HalloweenSkinPlugin:
             self.egg = EasterEgg(self.iface)
         elif not enabled and self.active:
             self.active = False
-            self.decoration.remove()
-            self.decoration = None
-            self.webs.remove()
-            self.webs = None
-            self.egg.remove()
-            self.egg = None
-            self.cursors.remove()
-            self.cursors = None
+            for name in PARTS:
+                getattr(self, name).remove()
+                setattr(self, name, None)
             app.setPalette(self.palette_before)
             self.palette_before = None
             app.setStyleSheet(without_skin(app.styleSheet()))
